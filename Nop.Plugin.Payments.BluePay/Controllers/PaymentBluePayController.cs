@@ -27,7 +27,8 @@ namespace Nop.Plugin.Payments.BluePay.Controllers
         private readonly ISettingService _settingService;
         private readonly IStoreService _storeService;
         private readonly IWorkContext _workContext;
-        
+
+        #region Ctor
         public PaymentBluePayController(ILocalizationService localizationService,
             ILogger logger,
             IOrderProcessingService orderProcessingService,
@@ -44,7 +45,9 @@ namespace Nop.Plugin.Payments.BluePay.Controllers
             this._storeService = storeService;
             this._workContext = workContext;
         }
+        #endregion
 
+        #region Methods
         [NonAction]
         public override IList<string> ValidatePaymentForm(FormCollection form)
         {
@@ -61,7 +64,7 @@ namespace Nop.Plugin.Payments.BluePay.Controllers
             };
             var validationResult = validator.Validate(model);
             if (!validationResult.IsValid)
-                validationResult.Errors.ToList().ForEach(x => warnings.Add(x.ErrorMessage));
+                warnings.AddRange(validationResult.Errors.Select(error => error.ErrorMessage));
 
             return warnings;
         }
@@ -184,7 +187,7 @@ namespace Nop.Plugin.Payments.BluePay.Controllers
             var model = new PaymentInfoModel();
 
             //years
-            for (int i = 0; i < 15; i++)
+            for (var i = 0; i < 15; i++)
             {
                 var year = Convert.ToString(DateTime.Now.Year + i);
                 model.ExpireYears.Add(new SelectListItem
@@ -195,7 +198,7 @@ namespace Nop.Plugin.Payments.BluePay.Controllers
             }
 
             //months
-            for (int i = 1; i <= 12; i++)
+            for (var i = 1; i <= 12; i++)
             {
                 var text = (i < 10) ? "0" + i : i.ToString();
                 model.ExpireMonths.Add(new SelectListItem
@@ -286,5 +289,6 @@ namespace Nop.Plugin.Payments.BluePay.Controllers
             }
             return new HttpStatusCodeResult(HttpStatusCode.OK);
         }
+        #endregion
     }
 }

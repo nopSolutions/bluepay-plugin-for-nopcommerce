@@ -334,7 +334,7 @@ namespace Nop.Plugin.Payments.BluePay
                 UserId = _bluePayPaymentSettings.UserId,
                 SecretKey = _bluePayPaymentSettings.SecretKey,
                 IsSandbox = _bluePayPaymentSettings.UseSandbox,
-                CustomerIP = _webHelper.GetCurrentIpAddress() ?? null,
+                CustomerIP = _webHelper.GetCurrentIpAddress(),
                 CustomId1 = customer.Id.ToString(),
                 CustomId2 = customer.CustomerGuid.ToString(),
                 FirstName = customer.BillingAddress.FirstName,
