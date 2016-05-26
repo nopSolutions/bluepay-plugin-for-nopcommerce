@@ -9,7 +9,7 @@ namespace Nop.Plugin.Payments.BluePay.Infrastructure.Cache
     /// <summary>
     /// RecurringPaymentInserted event consumer
     /// </summary>
-    public partial class RecurringPaymentInsertedConsumer :  IConsumer<EntityInserted<RecurringPayment>>
+    public partial class RecurringPaymentInsertedConsumer : IConsumer<EntityInserted<RecurringPayment>>
     {
         private readonly IOrderService _orderService;
 

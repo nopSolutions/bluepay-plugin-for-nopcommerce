@@ -132,6 +132,22 @@ namespace Nop.Plugin.Payments.BluePay
 
         #endregion
 
+        #region Utilities
+        /// <summary>
+        /// Get amount in the USD currency
+        /// </summary>
+        /// <param name="amount">Amount</param>
+        /// <returns>Amount in the USD currency</returns>
+        private decimal GetUsdAmount(decimal amount)
+        {
+            var usd = _currencyService.GetCurrencyByCode("USD");
+            if (usd == null)
+                throw new Exception("USD currency cannot be loaded");
+
+            return _currencyService.ConvertFromPrimaryStoreCurrency(amount, usd);
+        }
+        #endregion
+
         #region Methods
 
         /// <summary>
@@ -152,7 +168,7 @@ namespace Nop.Plugin.Payments.BluePay
                 UserId = _bluePayPaymentSettings.UserId,
                 SecretKey = _bluePayPaymentSettings.SecretKey,
                 IsSandbox = _bluePayPaymentSettings.UseSandbox,
-                CustomerIP = _webHelper.GetCurrentIpAddress() ?? null,
+                CustomerIP = _webHelper.GetCurrentIpAddress(),
                 CustomId1 = customer.Id.ToString(),
                 CustomId2 = customer.CustomerGuid.ToString(),
                 FirstName = customer.BillingAddress.FirstName,
@@ -255,16 +271,16 @@ namespace Nop.Plugin.Payments.BluePay
                 SecretKey = _bluePayPaymentSettings.SecretKey,
                 IsSandbox = _bluePayPaymentSettings.UseSandbox,
                 MasterId = refundPaymentRequest.Order.CaptureTransactionId,
-                Amount = !refundPaymentRequest.IsPartialRefund ? null :
-                    GetUsdAmount(refundPaymentRequest.AmountToRefund).ToString("F", new CultureInfo("en-US"))
+                Amount = refundPaymentRequest.IsPartialRefund ?
+                    GetUsdAmount(refundPaymentRequest.AmountToRefund).ToString("F", new CultureInfo("en-US")) : null
             };
 
             bpManager.Refund();
 
             if (bpManager.IsSuccessful)
             {
-                result.NewPaymentStatus = !refundPaymentRequest.IsPartialRefund ? PaymentStatus.Refunded :
-                    refundPaymentRequest.Order.RefundedAmount + refundPaymentRequest.AmountToRefund < refundPaymentRequest.Order.OrderTotal ?
+                result.NewPaymentStatus = (refundPaymentRequest.IsPartialRefund &&
+                    refundPaymentRequest.Order.RefundedAmount + refundPaymentRequest.AmountToRefund < refundPaymentRequest.Order.OrderTotal) ?
                     PaymentStatus.PartiallyRefunded : PaymentStatus.Refunded;
             }
             else
@@ -518,19 +534,5 @@ namespace Nop.Plugin.Payments.BluePay
         }
 
         #endregion
-
-        /// <summary>
-        /// Get amount in the USD currency
-        /// </summary>
-        /// <param name="amount">Amount</param>
-        /// <returns>Amount in the USD currency</returns>
-        private decimal GetUsdAmount(decimal amount)
-        {
-            var usd = _currencyService.GetCurrencyByCode("USD");
-            if (usd == null)
-                throw new Exception("USD currency cannot be loaded");
-
-            return _currencyService.ConvertFromPrimaryStoreCurrency(amount, usd);
-        }
     }
 }

@@ -60,7 +60,7 @@ namespace Nop.Plugin.Payments.BluePay
         public string MasterId { get; set; }
 
         // rebill info
-        public string DoRebill  { get; set; }
+        public string DoRebill { get; set; }
         public string RebillAmount { get; set; }
         public string RebillFirstDate { get; set; }
         public string RebillExpression { get; set; }
@@ -414,7 +414,7 @@ namespace Nop.Plugin.Payments.BluePay
             ServicePointManager.Expect100Continue = true;
             ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
 
-            byte[] postData = Encoding.Default.GetBytes(parameters);
+            var postData = Encoding.Default.GetBytes(parameters);
 
             var request = (HttpWebRequest)WebRequest.Create(url ?? "https://secure.bluepay.com/interfaces/bp20post");
             request.Method = "POST";

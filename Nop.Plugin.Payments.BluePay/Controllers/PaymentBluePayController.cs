@@ -61,40 +61,42 @@ namespace Nop.Plugin.Payments.BluePay.Controllers
             };
             var validationResult = validator.Validate(model);
             if (!validationResult.IsValid)
-                foreach (var error in validationResult.Errors)
-                    warnings.Add(error.ErrorMessage);
+                validationResult.Errors.ToList().ForEach(x => warnings.Add(x.ErrorMessage));
+
             return warnings;
         }
 
         [NonAction]
         public override ProcessPaymentRequest GetPaymentInfo(FormCollection form)
         {
-            var paymentInfo = new ProcessPaymentRequest();
-            paymentInfo.CreditCardNumber = form["CardNumber"];
-            paymentInfo.CreditCardExpireMonth = int.Parse(form["ExpireMonth"]);
-            paymentInfo.CreditCardExpireYear = int.Parse(form["ExpireYear"]);
-            paymentInfo.CreditCardCvv2 = form["CardCode"];
-            return paymentInfo;
+            return new ProcessPaymentRequest
+            {
+                CreditCardNumber = form["CardNumber"],
+                CreditCardExpireMonth = int.Parse(form["ExpireMonth"]),
+                CreditCardExpireYear = int.Parse(form["ExpireYear"]),
+                CreditCardCvv2 = form["CardCode"]
+            };
         }
 
         [AdminAuthorize]
         [ChildActionOnly]
         public ActionResult Configure()
         {
-            var storeScope = this.GetActiveStoreScopeConfiguration(_storeService, _workContext);
+            var storeScope = GetActiveStoreScopeConfiguration(_storeService, _workContext);
             var bluePayPaymentSettings = _settingService.LoadSetting<BluePayPaymentSettings>(storeScope);
 
-            var model = new ConfigurationModel();
-            model.UseSandbox = bluePayPaymentSettings.UseSandbox;
-            model.TransactModeId = Convert.ToInt32(bluePayPaymentSettings.TransactMode);
-            model.AccountId = bluePayPaymentSettings.AccountId;
-            model.UserId = bluePayPaymentSettings.UserId;
-            model.SecretKey = bluePayPaymentSettings.SecretKey;
-            model.AdditionalFee = bluePayPaymentSettings.AdditionalFee;
-            model.AdditionalFeePercentage = bluePayPaymentSettings.AdditionalFeePercentage;
-            model.TransactModeValues = bluePayPaymentSettings.TransactMode.ToSelectList();
-
-            model.ActiveStoreScopeConfiguration = storeScope;
+            var model = new ConfigurationModel
+            {
+                UseSandbox = bluePayPaymentSettings.UseSandbox,
+                TransactModeId = Convert.ToInt32(bluePayPaymentSettings.TransactMode),
+                AccountId = bluePayPaymentSettings.AccountId,
+                UserId = bluePayPaymentSettings.UserId,
+                SecretKey = bluePayPaymentSettings.SecretKey,
+                AdditionalFee = bluePayPaymentSettings.AdditionalFee,
+                AdditionalFeePercentage = bluePayPaymentSettings.AdditionalFeePercentage,
+                TransactModeValues = bluePayPaymentSettings.TransactMode.ToSelectList(),
+                ActiveStoreScopeConfiguration = storeScope
+            };
             if (storeScope > 0)
             {
                 model.UseSandbox_OverrideForStore = _settingService.SettingExists(bluePayPaymentSettings, x => x.UseSandbox, storeScope);
@@ -118,7 +120,7 @@ namespace Nop.Plugin.Payments.BluePay.Controllers
                 return Configure();
 
             //load settings for a chosen store scope
-            var storeScope = this.GetActiveStoreScopeConfiguration(_storeService, _workContext);
+            var storeScope = GetActiveStoreScopeConfiguration(_storeService, _workContext);
             var bluePayPaymentSettings = _settingService.LoadSetting<BluePayPaymentSettings>(storeScope);
 
             //save settings
@@ -184,7 +186,7 @@ namespace Nop.Plugin.Payments.BluePay.Controllers
             //years
             for (int i = 0; i < 15; i++)
             {
-                string year = Convert.ToString(DateTime.Now.Year + i);
+                var year = Convert.ToString(DateTime.Now.Year + i);
                 model.ExpireYears.Add(new SelectListItem
                 {
                     Text = year,
@@ -195,7 +197,7 @@ namespace Nop.Plugin.Payments.BluePay.Controllers
             //months
             for (int i = 1; i <= 12; i++)
             {
-                string text = (i < 10) ? "0" + i : i.ToString();
+                var text = (i < 10) ? "0" + i : i.ToString();
                 model.ExpireMonths.Add(new SelectListItem
                 {
                     Text = text,
@@ -204,7 +206,7 @@ namespace Nop.Plugin.Payments.BluePay.Controllers
             }
 
             //set postback values
-            var form = this.Request.Form;
+            var form = Request.Form;
             model.CardNumber = form["CardNumber"];
             model.CardCode = form["CardCode"];
             var selectedMonth = model.ExpireMonths.FirstOrDefault(x => x.Value.Equals(form["ExpireMonth"], StringComparison.InvariantCultureIgnoreCase));
@@ -220,7 +222,7 @@ namespace Nop.Plugin.Payments.BluePay.Controllers
         [HttpPost]
         public ActionResult Rebilling(FormCollection parameters)
         {
-            var storeScope = this.GetActiveStoreScopeConfiguration(_storeService, _workContext);
+            var storeScope = GetActiveStoreScopeConfiguration(_storeService, _workContext);
             var bluePayPaymentSettings = _settingService.LoadSetting<BluePayPaymentSettings>(storeScope);
             var bpManager = new BluePayManager
             {
@@ -231,7 +233,7 @@ namespace Nop.Plugin.Payments.BluePay.Controllers
 
             if (!bpManager.CheckRebillStamp(parameters))
             {
-                _logger.Error( "BluePay recurring error: the response has been tampered with");
+                _logger.Error("BluePay recurring error: the response has been tampered with");
                 return new HttpStatusCodeResult(HttpStatusCode.OK);
             }
 
@@ -279,8 +281,6 @@ namespace Nop.Plugin.Payments.BluePay.Controllers
                     case "stopped":
                         _orderProcessingService.CancelRecurringPayment(recurringPayment);
                         _logger.Information(string.Format("BluePay recurring order {0} was {1}", initialOrder.Id, parameters["status"]));
-                        break;
-                    default:
                         break;
                 }
             }

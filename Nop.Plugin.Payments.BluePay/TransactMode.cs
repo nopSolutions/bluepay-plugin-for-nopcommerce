@@ -13,6 +13,6 @@ namespace Nop.Plugin.Payments.BluePay
         /// <summary>
         /// Authorize and capture
         /// </summary>
-        AuthorizeAndCapture= 2
+        AuthorizeAndCapture = 2
     }
 }
