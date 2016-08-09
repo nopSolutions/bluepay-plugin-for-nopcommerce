@@ -58,10 +58,7 @@ namespace Nop.Plugin.Payments.BluePay
         /// </summary>
         public bool SupportCapture
         {
-            get
-            {
-                return true;
-            }
+            get { return true; }
         }
 
         /// <summary>
@@ -69,10 +66,7 @@ namespace Nop.Plugin.Payments.BluePay
         /// </summary>
         public bool SupportPartiallyRefund
         {
-            get
-            {
-                return true;
-            }
+            get { return true; }
         }
 
         /// <summary>
@@ -80,10 +74,7 @@ namespace Nop.Plugin.Payments.BluePay
         /// </summary>
         public bool SupportRefund
         {
-            get
-            {
-                return true;
-            }
+            get { return true; }
         }
 
         /// <summary>
@@ -91,10 +82,7 @@ namespace Nop.Plugin.Payments.BluePay
         /// </summary>
         public bool SupportVoid
         {
-            get
-            {
-                return true;
-            }
+            get { return true; }
         }
 
         /// <summary>
@@ -102,10 +90,7 @@ namespace Nop.Plugin.Payments.BluePay
         /// </summary>
         public RecurringPaymentType RecurringPaymentType
         {
-            get
-            {
-                return RecurringPaymentType.Automatic;
-            }
+            get { return RecurringPaymentType.Automatic; }
         }
 
         /// <summary>
@@ -113,10 +98,7 @@ namespace Nop.Plugin.Payments.BluePay
         /// </summary>
         public PaymentMethodType PaymentMethodType
         {
-            get
-            {
-                return PaymentMethodType.Standard;
-            }
+            get { return PaymentMethodType.Standard; }
         }
 
         /// <summary>
@@ -124,15 +106,13 @@ namespace Nop.Plugin.Payments.BluePay
         /// </summary>
         public bool SkipPaymentInfo
         {
-            get
-            {
-                return false;
-            }
+            get { return false; }
         }
 
         #endregion
 
         #region Utilities
+
         /// <summary>
         /// Get amount in the USD currency
         /// </summary>
@@ -142,10 +122,11 @@ namespace Nop.Plugin.Payments.BluePay
         {
             var usd = _currencyService.GetCurrencyByCode("USD");
             if (usd == null)
-                throw new Exception("USD currency cannot be loaded");
+                throw new Exception("USD currency could not be loaded");
 
             return _currencyService.ConvertFromPrimaryStoreCurrency(amount, usd);
         }
+
         #endregion
 
         #region Methods
@@ -313,6 +294,7 @@ namespace Nop.Plugin.Payments.BluePay
                 result.NewPaymentStatus = PaymentStatus.Voided;
             else
                 result.AddError(bpManager.Message);
+
             return result;
         }
 
@@ -377,6 +359,7 @@ namespace Nop.Plugin.Payments.BluePay
             }
             else
                 result.AddError(bpManager.Message);
+
             return result;
         }
 
@@ -475,17 +458,16 @@ namespace Nop.Plugin.Payments.BluePay
         }
 
         /// <summary>
-        /// Install plugin
+        /// Install the plugin
         /// </summary>
         public override void Install()
         {
             //settings
-            var settings = new BluePayPaymentSettings
+            _settingService.SaveSetting(new BluePayPaymentSettings
             {
                 TransactMode = TransactMode.Authorize,
                 UseSandbox = true
-            };
-            _settingService.SaveSetting(settings);
+            });
 
             //locales
             this.AddOrUpdatePluginLocaleResource("Plugins.Payments.BluePay.Fields.AccountId", "Account ID");
@@ -507,7 +489,7 @@ namespace Nop.Plugin.Payments.BluePay
         }
         
         /// <summary>
-        /// Uninstall plugin
+        /// Uninstall the plugin
         /// </summary>
         public override void Uninstall()
         {

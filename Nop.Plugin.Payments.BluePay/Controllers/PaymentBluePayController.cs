@@ -7,19 +7,21 @@ using Nop.Core;
 using Nop.Core.Domain.Payments;
 using Nop.Plugin.Payments.BluePay.Models;
 using Nop.Plugin.Payments.BluePay.Validators;
+using Nop.Services;
 using Nop.Services.Configuration;
 using Nop.Services.Localization;
 using Nop.Services.Logging;
 using Nop.Services.Orders;
 using Nop.Services.Payments;
 using Nop.Services.Stores;
-using Nop.Web.Framework;
 using Nop.Web.Framework.Controllers;
 
 namespace Nop.Plugin.Payments.BluePay.Controllers
 {
     public class PaymentBluePayController : BasePaymentController
     {
+        #region Fields
+
         private readonly ILocalizationService _localizationService;
         private readonly ILogger _logger;
         private readonly IOrderProcessingService _orderProcessingService;
@@ -28,7 +30,10 @@ namespace Nop.Plugin.Payments.BluePay.Controllers
         private readonly IStoreService _storeService;
         private readonly IWorkContext _workContext;
 
+        #endregion
+
         #region Ctor
+
         public PaymentBluePayController(ILocalizationService localizationService,
             ILogger logger,
             IOrderProcessingService orderProcessingService,
@@ -45,9 +50,11 @@ namespace Nop.Plugin.Payments.BluePay.Controllers
             this._storeService = storeService;
             this._workContext = workContext;
         }
+
         #endregion
 
         #region Methods
+
         [NonAction]
         public override IList<string> ValidatePaymentForm(FormCollection form)
         {
@@ -138,40 +145,13 @@ namespace Nop.Plugin.Payments.BluePay.Controllers
             /* We do not clear cache after each setting update.
              * This behavior can increase performance because cached settings will not be cleared 
              * and loaded from database after each update */
-            if (model.UseSandbox_OverrideForStore || storeScope == 0)
-                _settingService.SaveSetting(bluePayPaymentSettings, x => x.UseSandbox, storeScope, false);
-            else if (storeScope > 0)
-                _settingService.DeleteSetting(bluePayPaymentSettings, x => x.UseSandbox, storeScope);
-
-            if (model.TransactModeId_OverrideForStore || storeScope == 0)
-                _settingService.SaveSetting(bluePayPaymentSettings, x => x.TransactMode, storeScope, false);
-            else if (storeScope > 0)
-                _settingService.DeleteSetting(bluePayPaymentSettings, x => x.TransactMode, storeScope);
-
-            if (model.AccountId_OverrideForStore || storeScope == 0)
-                _settingService.SaveSetting(bluePayPaymentSettings, x => x.AccountId, storeScope, false);
-            else if (storeScope > 0)
-                _settingService.DeleteSetting(bluePayPaymentSettings, x => x.AccountId, storeScope);
-
-            if (model.UserId_OverrideForStore || storeScope == 0)
-                _settingService.SaveSetting(bluePayPaymentSettings, x => x.UserId, storeScope, false);
-            else if (storeScope > 0)
-                _settingService.DeleteSetting(bluePayPaymentSettings, x => x.UserId, storeScope);
-
-            if (model.SecretKey_OverrideForStore || storeScope == 0)
-                _settingService.SaveSetting(bluePayPaymentSettings, x => x.SecretKey, storeScope, false);
-            else if (storeScope > 0)
-                _settingService.DeleteSetting(bluePayPaymentSettings, x => x.SecretKey, storeScope);
-
-            if (model.AdditionalFee_OverrideForStore || storeScope == 0)
-                _settingService.SaveSetting(bluePayPaymentSettings, x => x.AdditionalFee, storeScope, false);
-            else if (storeScope > 0)
-                _settingService.DeleteSetting(bluePayPaymentSettings, x => x.AdditionalFee, storeScope);
-
-            if (model.AdditionalFeePercentage_OverrideForStore || storeScope == 0)
-                _settingService.SaveSetting(bluePayPaymentSettings, x => x.AdditionalFeePercentage, storeScope, false);
-            else if (storeScope > 0)
-                _settingService.DeleteSetting(bluePayPaymentSettings, x => x.AdditionalFeePercentage, storeScope);
+            _settingService.SaveSettingOverridablePerStore(bluePayPaymentSettings, x => x.UseSandbox, model.UseSandbox_OverrideForStore, storeScope, false);
+            _settingService.SaveSettingOverridablePerStore(bluePayPaymentSettings, x => x.TransactMode, model.TransactModeId_OverrideForStore, storeScope, false);
+            _settingService.SaveSettingOverridablePerStore(bluePayPaymentSettings, x => x.AccountId, model.AccountId_OverrideForStore, storeScope, false);
+            _settingService.SaveSettingOverridablePerStore(bluePayPaymentSettings, x => x.UserId, model.UserId_OverrideForStore, storeScope, false);
+            _settingService.SaveSettingOverridablePerStore(bluePayPaymentSettings, x => x.SecretKey, model.SecretKey_OverrideForStore, storeScope, false);
+            _settingService.SaveSettingOverridablePerStore(bluePayPaymentSettings, x => x.AdditionalFee, model.AdditionalFee_OverrideForStore, storeScope, false);
+            _settingService.SaveSettingOverridablePerStore(bluePayPaymentSettings, x => x.AdditionalFeePercentage, model.AdditionalFeePercentage_OverrideForStore, storeScope, false);
 
             //now clear settings cache
             _settingService.ClearCache();
@@ -200,22 +180,20 @@ namespace Nop.Plugin.Payments.BluePay.Controllers
             //months
             for (var i = 1; i <= 12; i++)
             {
-                var text = (i < 10) ? "0" + i : i.ToString();
                 model.ExpireMonths.Add(new SelectListItem
                 {
-                    Text = text,
+                    Text = i.ToString("D2"),
                     Value = i.ToString(),
                 });
             }
 
             //set postback values
-            var form = Request.Form;
-            model.CardNumber = form["CardNumber"];
-            model.CardCode = form["CardCode"];
-            var selectedMonth = model.ExpireMonths.FirstOrDefault(x => x.Value.Equals(form["ExpireMonth"], StringComparison.InvariantCultureIgnoreCase));
+            model.CardNumber = Request.Form["CardNumber"];
+            model.CardCode = Request.Form["CardCode"];
+            var selectedMonth = model.ExpireMonths.FirstOrDefault(x => x.Value.Equals(Request.Form["ExpireMonth"], StringComparison.InvariantCultureIgnoreCase));
             if (selectedMonth != null)
                 selectedMonth.Selected = true;
-            var selectedYear = model.ExpireYears.FirstOrDefault(x => x.Value.Equals(form["ExpireYear"], StringComparison.InvariantCultureIgnoreCase));
+            var selectedYear = model.ExpireYears.FirstOrDefault(x => x.Value.Equals(Request.Form["ExpireYear"], StringComparison.InvariantCultureIgnoreCase));
             if (selectedYear != null)
                 selectedYear.Selected = true;
 
@@ -263,18 +241,11 @@ namespace Nop.Plugin.Payments.BluePay.Controllers
                 {
                     case "expired":
                     case "active":
-                        _orderProcessingService.ProcessNextRecurringPayment(recurringPayment);
-                        var lastPayment = recurringPayment.RecurringPaymentHistory.Last();
-                        if (lastPayment != null)
+                        var processPaymentResult = new ProcessPaymentResult
                         {
-                            var lastOrder = _orderService.GetOrderById(lastPayment.OrderId);
-                            if (lastOrder != null)
-                            {
-                                lastOrder.PaymentStatus = PaymentStatus.Paid;
-                                _orderProcessingService.CheckOrderStatus(lastOrder);
-                            }
-                        }
-                        _logger.Information(string.Format("BluePay recurring order {0} was paid", initialOrder.Id));
+                            NewPaymentStatus = PaymentStatus.Paid,
+                        };
+                        _orderProcessingService.ProcessNextRecurringPayment(recurringPayment, processPaymentResult);
                         break;
                     case "failed":
                     case "error":
@@ -287,8 +258,10 @@ namespace Nop.Plugin.Payments.BluePay.Controllers
                         break;
                 }
             }
+
             return new HttpStatusCodeResult(HttpStatusCode.OK);
         }
+
         #endregion
     }
 }

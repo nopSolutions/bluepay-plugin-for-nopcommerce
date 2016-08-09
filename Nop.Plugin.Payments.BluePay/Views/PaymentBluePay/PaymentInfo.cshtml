@@ -3,10 +3,11 @@
 }
 @model Nop.Plugin.Payments.BluePay.Models.PaymentInfoModel
 @using Nop.Web.Framework;
+
 <table width="100%" cellspacing="2" cellpadding="1" border="0">
     <tr>
         <td>
-            @Html.NopLabelFor(model => model.CardNumber, false):
+            @Html.LabelFor(model => model.CardNumber, false):
         </td>
         <td>
             @Html.TextBoxFor(model => model.CardNumber, new { style = "Width: 165px;", autocomplete = "off", maxlength = 22 })
@@ -15,7 +16,7 @@
     </tr>
     <tr>
         <td>
-            @Html.NopLabelFor(model => model.ExpireMonth, false):
+            @Html.LabelFor(model => model.ExpireMonth, false):
         </td>
         <td>
             @Html.DropDownListFor(model => model.ExpireMonth, Model.ExpireMonths)
@@ -25,7 +26,7 @@
     </tr>
     <tr>
         <td>
-            @Html.NopLabelFor(model => model.CardCode, false):
+            @Html.LabelFor(model => model.CardCode, false):
         </td>
         <td>
             @Html.TextBoxFor(model => model.CardCode, new { style = "Width: 60px;", autocomplete = "off", maxlength = 4 })

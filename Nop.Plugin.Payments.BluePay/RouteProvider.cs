@@ -14,12 +14,10 @@ namespace Nop.Plugin.Payments.BluePay
                  new[] { "Nop.Plugin.Payments.BluePay.Controllers" }
             );
         }
+
         public int Priority
         {
-            get
-            {
-                return 0;
-            }
+            get { return 0; }
         }
     }
 }

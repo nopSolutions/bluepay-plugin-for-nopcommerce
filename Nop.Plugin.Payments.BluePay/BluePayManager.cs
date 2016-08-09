@@ -10,12 +10,24 @@ using System.Web;
 namespace Nop.Plugin.Payments.BluePay
 {
     /// <summary>
-    /// The BluePay manager.
+    /// The BluePay manager
     /// </summary>
     public class BluePayManager
     {
+        #region Const
+
+        private const string DEFAULT_URL = "https://secure.bluepay.com/interfaces/bp20post";
+        private const string REBILLING_URL = "https://secure.bluepay.com/interfaces/bp20rebadmin";
+        private const string VERSION = "3";
+
+        #endregion
+
+        #region Fields
+
         private NameValueCollection _requestParams;
         private NameValueCollection _responseParams;
+
+        #endregion
 
         #region Request properties
 
@@ -227,16 +239,102 @@ namespace Nop.Plugin.Payments.BluePay
 
         #endregion
 
+        #region Ctor
+
         public BluePayManager()
         {
             _requestParams = HttpUtility.ParseQueryString(string.Empty);
             _responseParams = new NameValueCollection();
         }
 
+        #endregion
+
+        #region Utilities
+
+        /// <summary>
+        /// Set common parameters and post request to BluePay 2.0 API
+        /// </summary>
+        /// <param name="transactionType">Transaction type</param>
+        private void Post20API(string transactionType)
+        {
+            _requestParams.Add("ACCOUNT_ID", AccountId);
+            _requestParams.Add("USER_ID", UserId);
+            _requestParams.Add("MODE", IsSandbox ? "TEST" : "LIVE");
+            _requestParams.Add("TRANS_TYPE", transactionType);
+            _requestParams.Add("VERSION", VERSION);
+
+            _requestParams.Add("TPS_DEF", "ACCOUNT_ID MODE TRANS_TYPE AMOUNT MASTER_ID");
+            _requestParams.Add("TAMPER_PROOF_SEAL", CalculateTPS(transactionType));
+
+            PostRequest(_requestParams.ToString());
+        }
+
+        /// <summary>
+        /// Calculates TAMPER_PROOF_SEAL 
+        /// </summary>
+        /// <param name="transactionType">The transaction type</param>
+        /// <param name="tamperProofSeal">The tamper proof seal; pass null to calculate</param>
+        /// <returns>A hex-encoded md5 checksum</returns>
+        private string CalculateTPS(string transactionType, string tamperProofSeal = null)
+        {
+            string tps = tamperProofSeal ?? string.Format("{0}{1}{2}{3}{4}{5}",
+                SecretKey, AccountId, IsSandbox ? "TEST" : "LIVE", transactionType, Amount, MasterId);
+
+            var md5 = new MD5CryptoServiceProvider();
+            var hash = md5.ComputeHash(Encoding.Default.GetBytes(tps));
+
+            return BitConverter.ToString(hash).Replace("-", string.Empty);
+        }
+
+        /// <summary>
+        /// Send POST request to BluePay
+        /// </summary>
+        /// <param name="parameters">Request parameters</param>
+        /// <param name="url">URL fo request</param>
+        private void PostRequest(string parameters, string url = null)
+        {
+            ServicePointManager.Expect100Continue = true;
+            ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
+
+            var postData = Encoding.Default.GetBytes(parameters);
+
+            var request = (HttpWebRequest)WebRequest.Create(url ?? DEFAULT_URL);
+            request.Method = "POST";
+            request.ContentType = "application/x-www-form-urlencoded";
+            request.ContentLength = postData.Length;
+            request.UserAgent = "nopCommerce";
+
+            try
+            {
+                using (var stream = request.GetRequestStream())
+                {
+                    stream.Write(postData, 0, postData.Length);
+                }
+                var httpResponse = (HttpWebResponse)request.GetResponse();
+                using (var streamReader = new StreamReader(httpResponse.GetResponseStream()))
+                {
+                    _responseParams = HttpUtility.ParseQueryString(streamReader.ReadToEnd());
+                }
+            }
+            catch (WebException e)
+            {
+                using (var streamReader = new StreamReader(e.Response.GetResponseStream()))
+                {
+                    _responseParams = HttpUtility.ParseQueryString(streamReader.ReadToEnd());
+                    if (string.IsNullOrEmpty(Message))
+                        _responseParams["MESSAGE"] = e.Message;
+                }
+            }
+        }
+
+        #endregion
+
+        #region Methods
+
         /// <summary>
         /// Authorization or sale (authorization and capture) transaction
         /// </summary>
-        /// <param name="capture">Use capture after authorization transaction</param>
+        /// <param name="capture">A value indicating whether to use capture after authorization transaction</param>
         public void Sale(bool capture)
         {
             _requestParams.Add("PAYMENT_TYPE", "CREDIT");
@@ -323,12 +421,12 @@ namespace Nop.Plugin.Payments.BluePay
             _requestParams.Add("TAMPER_PROOF_SEAL", CalculateTPS(null, string.Format("{0}{1}{2}{3}",
                 SecretKey, AccountId, "GET", MasterId)));
 
-            PostRequest(_requestParams.ToString(), "https://secure.bluepay.com/interfaces/bp20rebadmin");
+            PostRequest(_requestParams.ToString(), REBILLING_URL);
 
             if (IsSuccessfulCancelRecurring)
                 return;
 
-            //stop rebilling if not deleted or already stopped
+            //stop rebilling if transaction is not removed or is not stopped
             _requestParams = HttpUtility.ParseQueryString(string.Empty);
             _requestParams.Add("ACCOUNT_ID", AccountId);
             _requestParams.Add("USER_ID", UserId);
@@ -338,38 +436,7 @@ namespace Nop.Plugin.Payments.BluePay
             _requestParams.Add("TAMPER_PROOF_SEAL", CalculateTPS(null, string.Format("{0}{1}{2}{3}", 
                 SecretKey, AccountId, "SET", MasterId)));
             
-            PostRequest(_requestParams.ToString(), "https://secure.bluepay.com/interfaces/bp20rebadmin");
-        }
-
-        /// <summary>
-        /// Set common parameters and post request to BluePay 2.0 API
-        /// </summary>
-        /// <param name="transactionType">Transaction type</param>
-        private void Post20API(string transactionType)
-        {
-            _requestParams.Add("ACCOUNT_ID", AccountId);
-            _requestParams.Add("USER_ID", UserId);
-            _requestParams.Add("MODE", IsSandbox ? "TEST" : "LIVE");
-            _requestParams.Add("TRANS_TYPE", transactionType);
-            _requestParams.Add("VERSION", "3");
-
-            _requestParams.Add("TPS_DEF", "ACCOUNT_ID MODE TRANS_TYPE AMOUNT MASTER_ID");
-            _requestParams.Add("TAMPER_PROOF_SEAL", CalculateTPS(transactionType));
-
-            PostRequest(_requestParams.ToString());
-        }
-
-        /// <summary>
-        /// Calculates TAMPER_PROOF_SEAL 
-        /// </summary>
-        /// <returns>A hex-encoded md5 checksum</returns>
-        private string CalculateTPS(string transactionType, string tamperProofSeal = null)
-        {
-            string tps = tamperProofSeal ?? string.Format("{0}{1}{2}{3}{4}{5}", 
-                SecretKey, AccountId, IsSandbox ? "TEST" : "LIVE", transactionType, Amount, MasterId); 
-            var md5 = new MD5CryptoServiceProvider();
-            var hash = md5.ComputeHash(Encoding.Default.GetBytes(tps));
-            return BitConverter.ToString(hash).Replace("-", string.Empty);
+            PostRequest(_requestParams.ToString(), REBILLING_URL);
         }
 
         /// <summary>
@@ -399,50 +466,11 @@ namespace Nop.Plugin.Payments.BluePay
             _requestParams.Add("TAMPER_PROOF_SEAL", CalculateTPS(null, string.Format("{0}{1}{2}{3}",
                 SecretKey, AccountId, "GET", id)));
 
-            PostRequest(_requestParams.ToString(), "https://secure.bluepay.com/interfaces/bp20rebadmin");
+            PostRequest(_requestParams.ToString(), REBILLING_URL);
 
             return _responseParams["TEMPLATE_ID"] ?? string.Empty;
         }
 
-        /// <summary>
-        /// Send POST request to BluePay
-        /// </summary>
-        /// <param name="parameters">Request parameters</param>
-        /// <param name="url">URL fo request</param>
-        private void PostRequest(string parameters, string url = null)
-        {
-            ServicePointManager.Expect100Continue = true;
-            ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
-
-            var postData = Encoding.Default.GetBytes(parameters);
-
-            var request = (HttpWebRequest)WebRequest.Create(url ?? "https://secure.bluepay.com/interfaces/bp20post");
-            request.Method = "POST";
-            request.ContentType = "application/x-www-form-urlencoded";
-            request.ContentLength = postData.Length;
-            request.UserAgent = "nopCommerce";
-            
-            try
-            {
-                using (var stream = request.GetRequestStream())
-                {
-                    stream.Write(postData, 0, postData.Length);
-                }
-                var httpResponse = (HttpWebResponse)request.GetResponse();
-                using (var streamReader = new StreamReader(httpResponse.GetResponseStream()))
-                {
-                    _responseParams = HttpUtility.ParseQueryString(streamReader.ReadToEnd());
-                }
-            }
-            catch (WebException e)
-            {
-                using (var streamReader = new StreamReader(e.Response.GetResponseStream()))
-                {
-                    _responseParams = HttpUtility.ParseQueryString(streamReader.ReadToEnd());
-                    if (string.IsNullOrEmpty(Message))
-                        _responseParams["MESSAGE"] = e.Message;
-                }
-            }
-        }
+        #endregion
     }
 }
