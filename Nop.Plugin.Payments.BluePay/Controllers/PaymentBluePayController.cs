@@ -118,7 +118,7 @@ namespace Nop.Plugin.Payments.BluePay.Controllers
                 model.AdditionalFeePercentage_OverrideForStore = _settingService.SettingExists(bluePayPaymentSettings, x => x.AdditionalFeePercentage, storeScope);
             }
 
-            return View("~/Plugins/Payments.BluePay/Views/PaymentBluePay/Configure.cshtml", model);
+            return View("~/Plugins/Payments.BluePay/Views/Configure.cshtml", model);
         }
 
         [HttpPost]
@@ -197,7 +197,7 @@ namespace Nop.Plugin.Payments.BluePay.Controllers
             if (selectedYear != null)
                 selectedYear.Selected = true;
 
-            return View("~/Plugins/Payments.BluePay/Views/PaymentBluePay/PaymentInfo.cshtml", model);
+            return View("~/Plugins/Payments.BluePay/Views/PaymentInfo.cshtml", model);
         }
 
         [HttpPost]
@@ -235,21 +235,21 @@ namespace Nop.Plugin.Payments.BluePay.Controllers
             }
 
             var recurringPayment = _orderService.SearchRecurringPayments(initialOrderId: initialOrder.Id).FirstOrDefault();
+            var processPaymentResult = new ProcessPaymentResult();
             if (recurringPayment != null)
             {
                 switch (parameters["status"])
                 {
                     case "expired":
                     case "active":
-                        var processPaymentResult = new ProcessPaymentResult
-                        {
-                            NewPaymentStatus = PaymentStatus.Paid,
-                        };
+                        processPaymentResult.NewPaymentStatus = PaymentStatus.Paid;
                         _orderProcessingService.ProcessNextRecurringPayment(recurringPayment, processPaymentResult);
                         break;
                     case "failed":
                     case "error":
-                        _logger.Error(string.Format("BluePay recurring order {0} {1}", initialOrder.Id, parameters["status"]));
+                        processPaymentResult.RecurringPaymentFailed = true;
+                        processPaymentResult.Errors.Add(string.Format("BluePay recurring order {0} {1}", initialOrder.Id, parameters["status"]));
+                        _orderProcessingService.ProcessNextRecurringPayment(recurringPayment, processPaymentResult);
                         break;
                     case "deleted":
                     case "stopped":

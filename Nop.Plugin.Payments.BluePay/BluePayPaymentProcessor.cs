@@ -29,6 +29,7 @@ namespace Nop.Plugin.Payments.BluePay
         private readonly IOrderTotalCalculationService _orderTotalCalculationService;
         private readonly ISettingService _settingService;
         private readonly IWebHelper _webHelper;
+        private readonly ILocalizationService _localizationService;
 
         #endregion
 
@@ -39,7 +40,8 @@ namespace Nop.Plugin.Payments.BluePay
             ICustomerService customerService,
             IOrderTotalCalculationService orderTotalCalculationService,
             ISettingService settingService, 
-            IWebHelper webHelper)
+            IWebHelper webHelper,
+            ILocalizationService localizationService)
         {
             this._bluePayPaymentSettings = bluePayPaymentSettings;
             this._currencyService = currencyService;
@@ -47,6 +49,7 @@ namespace Nop.Plugin.Payments.BluePay
             this._orderTotalCalculationService = orderTotalCalculationService;
             this._settingService = settingService;
             this._webHelper = webHelper;
+            this._localizationService = localizationService;
         }
 
         #endregion
@@ -107,6 +110,14 @@ namespace Nop.Plugin.Payments.BluePay
         public bool SkipPaymentInfo
         {
             get { return false; }
+        }
+
+        /// <summary>
+        /// Gets a payment method description that will be displayed on checkout pages in the public store
+        /// </summary>
+        public string PaymentMethodDescription
+        {
+            get { return _localizationService.GetResource("Plugins.Payments.BluePay.PaymentMethodDescription"); }
         }
 
         #endregion
@@ -252,21 +263,18 @@ namespace Nop.Plugin.Payments.BluePay
                 SecretKey = _bluePayPaymentSettings.SecretKey,
                 IsSandbox = _bluePayPaymentSettings.UseSandbox,
                 MasterId = refundPaymentRequest.Order.CaptureTransactionId,
-                Amount = refundPaymentRequest.IsPartialRefund ?
-                    GetUsdAmount(refundPaymentRequest.AmountToRefund).ToString("F", new CultureInfo("en-US")) : null
+                Amount = refundPaymentRequest.IsPartialRefund ? GetUsdAmount(refundPaymentRequest.AmountToRefund).ToString("F", new CultureInfo("en-US")) : null
             };
 
             bpManager.Refund();
 
-            if (bpManager.IsSuccessful)
-            {
-                result.NewPaymentStatus = (refundPaymentRequest.IsPartialRefund &&
-                    refundPaymentRequest.Order.RefundedAmount + refundPaymentRequest.AmountToRefund < refundPaymentRequest.Order.OrderTotal) ?
-                    PaymentStatus.PartiallyRefunded : PaymentStatus.Refunded;
-            }
-            else
+            if (!bpManager.IsSuccessful)
                 result.AddError(bpManager.Message);
-
+            else
+                result.NewPaymentStatus = refundPaymentRequest.IsPartialRefund 
+                    && refundPaymentRequest.Order.RefundedAmount + refundPaymentRequest.AmountToRefund < refundPaymentRequest.Order.OrderTotal 
+                    ? PaymentStatus.PartiallyRefunded : PaymentStatus.Refunded;
+            
             return result;
         }
 
@@ -484,6 +492,7 @@ namespace Nop.Plugin.Payments.BluePay
             this.AddOrUpdatePluginLocaleResource("Plugins.Payments.BluePay.Fields.UserId.Hint", "Specify BluePay user number.");
             this.AddOrUpdatePluginLocaleResource("Plugins.Payments.BluePay.Fields.UseSandbox", "Use sandbox");
             this.AddOrUpdatePluginLocaleResource("Plugins.Payments.BluePay.Fields.UseSandbox.Hint", "Check to enable sandbox (testing environment).");
+            this.AddOrUpdatePluginLocaleResource("Plugins.Payments.BluePay.PaymentMethodDescription", "Pay by credit / debit card");
 
             base.Install();
         }
@@ -511,6 +520,7 @@ namespace Nop.Plugin.Payments.BluePay
             this.DeletePluginLocaleResource("Plugins.Payments.BluePay.Fields.UserId.Hint");
             this.DeletePluginLocaleResource("Plugins.Payments.BluePay.Fields.UseSandbox");
             this.DeletePluginLocaleResource("Plugins.Payments.BluePay.Fields.UseSandbox.Hint");
+            this.DeletePluginLocaleResource("Plugins.Payments.BluePay.PaymentMethodDescription");
 
             base.Uninstall();
         }

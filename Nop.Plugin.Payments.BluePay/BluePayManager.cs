@@ -293,9 +293,6 @@ namespace Nop.Plugin.Payments.BluePay
         /// <param name="url">URL fo request</param>
         private void PostRequest(string parameters, string url = null)
         {
-            ServicePointManager.Expect100Continue = true;
-            ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
-
             var postData = Encoding.Default.GetBytes(parameters);
 
             var request = (HttpWebRequest)WebRequest.Create(url ?? DEFAULT_URL);
