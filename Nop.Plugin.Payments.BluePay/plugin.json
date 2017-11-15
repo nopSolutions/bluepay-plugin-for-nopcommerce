@@ -1,0 +1,11 @@
+﻿{
+  "Group": "Payment methods",
+  "FriendlyName": "BluePay",
+  "SystemName": "Payments.BluePay",
+  "Version": "1.30",
+  "SupportedVersions": [ "4.00" ],
+  "Author": "nopCommerce team",
+  "DisplayOrder": 1,
+  "FileName": "Nop.Plugin.Payments.BluePay.dll",
+  "Description": "This plugin allows paying with BluePay"
+}

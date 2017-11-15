@@ -1,12 +1,15 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
-using System.Web.Routing;
+using System.Linq;
+using Microsoft.AspNetCore.Http;
 using Nop.Core;
 using Nop.Core.Domain.Orders;
 using Nop.Core.Domain.Payments;
 using Nop.Core.Plugins;
 using Nop.Plugin.Payments.BluePay.Controllers;
+using Nop.Plugin.Payments.BluePay.Models;
+using Nop.Plugin.Payments.BluePay.Validators;
 using Nop.Services.Configuration;
 using Nop.Services.Customers;
 using Nop.Services.Directory;
@@ -55,6 +58,11 @@ namespace Nop.Plugin.Payments.BluePay
         #endregion
 
         #region Properties
+
+        public void GetPublicViewComponent(out string viewComponentName)
+        {
+            viewComponentName = "PaymentBluePay";
+        }
 
         /// <summary>
         /// Gets a value indicating whether capture is supported
@@ -169,13 +177,12 @@ namespace Nop.Plugin.Payments.BluePay
                 Address1 = customer.BillingAddress.Address1,
                 Address2 = customer.BillingAddress.Address2,
                 City = customer.BillingAddress.City,
-                Country = customer.BillingAddress.Country != null ? customer.BillingAddress.Country.ThreeLetterIsoCode : null,
+                Country = customer.BillingAddress.Country?.ThreeLetterIsoCode,
                 Zip = customer.BillingAddress.ZipPostalCode,
                 Phone = customer.BillingAddress.PhoneNumber,
-                State = customer.BillingAddress.StateProvince != null ? customer.BillingAddress.StateProvince.Abbreviation : null,
+                State = customer.BillingAddress.StateProvince?.Abbreviation,
                 CardNumber = processPaymentRequest.CreditCardNumber,
-                CardExpire = string.Format("{0:MMyy}", 
-                    new DateTime(processPaymentRequest.CreditCardExpireYear, processPaymentRequest.CreditCardExpireMonth, 1)),
+                CardExpire = $"{new DateTime(processPaymentRequest.CreditCardExpireYear, processPaymentRequest.CreditCardExpireMonth, 1):MMyy}",
                 CardCvv2 = processPaymentRequest.CreditCardCvv2,
                 Amount = GetUsdAmount(processPaymentRequest.OrderTotal).ToString("F", new CultureInfo("en-US")),
                 OrderId = processPaymentRequest.OrderGuid.ToString(),
@@ -338,8 +345,7 @@ namespace Nop.Plugin.Payments.BluePay
                 Phone = customer.BillingAddress.PhoneNumber,
                 State = customer.BillingAddress.StateProvince != null ? customer.BillingAddress.StateProvince.Abbreviation : null,
                 CardNumber = processPaymentRequest.CreditCardNumber,
-                CardExpire = string.Format("{0:MMyy}",
-                     new DateTime(processPaymentRequest.CreditCardExpireYear, processPaymentRequest.CreditCardExpireMonth, 1)),
+                CardExpire = $"{new DateTime(processPaymentRequest.CreditCardExpireYear, processPaymentRequest.CreditCardExpireMonth, 1):MMyy}",
                 CardCvv2 = processPaymentRequest.CreditCardCvv2,
                 Amount = GetUsdAmount(processPaymentRequest.OrderTotal).ToString("F", new CultureInfo("en-US")),
                 OrderId = processPaymentRequest.OrderGuid.ToString(),
@@ -347,10 +353,8 @@ namespace Nop.Plugin.Payments.BluePay
                 DoRebill = "1",
                 RebillAmount = GetUsdAmount(processPaymentRequest.OrderTotal).ToString("F", new CultureInfo("en-US")),
                 RebillCycles = processPaymentRequest.RecurringTotalCycles > 0 ? (processPaymentRequest.RecurringTotalCycles - 1).ToString() : null,
-                RebillFirstDate = string.Format("{0} {1}", processPaymentRequest.RecurringCycleLength,
-                    processPaymentRequest.RecurringCyclePeriod.ToString().TrimEnd('s').ToUpperInvariant()),
-                RebillExpression = string.Format("{0} {1}", processPaymentRequest.RecurringCycleLength,
-                    processPaymentRequest.RecurringCyclePeriod.ToString().TrimEnd('s').ToUpperInvariant())
+                RebillFirstDate = $"{processPaymentRequest.RecurringCycleLength} {processPaymentRequest.RecurringCyclePeriod.ToString().TrimEnd('s').ToUpperInvariant()}",
+                RebillExpression = $"{processPaymentRequest.RecurringCycleLength} {processPaymentRequest.RecurringCyclePeriod.ToString().TrimEnd('s').ToUpperInvariant()}"
             };
 
             bpManager.SaleRecurring();
@@ -431,29 +435,52 @@ namespace Nop.Plugin.Payments.BluePay
         }
 
         /// <summary>
-        /// Gets a route for provider configuration
+        /// Validate payment form
         /// </summary>
-        /// <param name="actionName">Action name</param>
-        /// <param name="controllerName">Controller name</param>
-        /// <param name="routeValues">Route values</param>
-        public void GetConfigurationRoute(out string actionName, out string controllerName, out RouteValueDictionary routeValues)
+        /// <param name="form">The parsed form values</param>
+        /// <returns>List of validating errors</returns>
+        public IList<string> ValidatePaymentForm(IFormCollection form)
         {
-            actionName = "Configure";
-            controllerName = "PaymentBluePay";
-            routeValues = new RouteValueDictionary { { "Namespaces", "Nop.Plugin.Payments.BluePay.Controllers" }, { "area", null } };
+            var warnings = new List<string>();
+
+            //validate
+            var validator = new PaymentInfoValidator(_localizationService);
+            var model = new PaymentInfoModel
+            {
+                CardNumber = form["CardNumber"],
+                ExpireMonth = form["ExpireMonth"],
+                ExpireYear = form["ExpireYear"],
+                CardCode = form["CardCode"]
+            };
+            var validationResult = validator.Validate(model);
+            if (!validationResult.IsValid)
+                warnings.AddRange(validationResult.Errors.Select(error => error.ErrorMessage));
+
+            return warnings;
         }
 
         /// <summary>
-        /// Gets a route for payment info
+        /// Get payment information
         /// </summary>
-        /// <param name="actionName">Action name</param>
-        /// <param name="controllerName">Controller name</param>
-        /// <param name="routeValues">Route values</param>
-        public void GetPaymentInfoRoute(out string actionName, out string controllerName, out RouteValueDictionary routeValues)
+        /// <param name="form">The parsed form values</param>
+        /// <returns>Payment info holder</returns>
+        public ProcessPaymentRequest GetPaymentInfo(IFormCollection form)
         {
-            actionName = "PaymentInfo";
-            controllerName = "PaymentBluePay";
-            routeValues = new RouteValueDictionary { { "Namespaces", "Nop.Plugin.Payments.BluePay.Controllers" }, { "area", null } };
+            return new ProcessPaymentRequest
+            {
+                CreditCardNumber = form["CardNumber"],
+                CreditCardExpireMonth = int.Parse(form["ExpireMonth"]),
+                CreditCardExpireYear = int.Parse(form["ExpireYear"]),
+                CreditCardCvv2 = form["CardCode"]
+            };
+        }
+
+        /// <summary>
+        /// Gets a configuration page URL
+        /// </summary>
+        public override string GetConfigurationPageUrl()
+        {
+            return $"{_webHelper.GetStoreLocation()}Admin/PaymentBluePay/Configure";
         }
 
         /// <summary>

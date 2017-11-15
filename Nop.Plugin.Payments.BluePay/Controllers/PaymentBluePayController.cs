@@ -1,20 +1,21 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Net;
-using System.Web.Mvc;
+using Microsoft.AspNetCore.Mvc;
 using Nop.Core;
 using Nop.Core.Domain.Payments;
 using Nop.Plugin.Payments.BluePay.Models;
-using Nop.Plugin.Payments.BluePay.Validators;
 using Nop.Services;
 using Nop.Services.Configuration;
 using Nop.Services.Localization;
 using Nop.Services.Logging;
 using Nop.Services.Orders;
 using Nop.Services.Payments;
+using Nop.Services.Security;
 using Nop.Services.Stores;
+using Nop.Web.Framework;
 using Nop.Web.Framework.Controllers;
+using Nop.Web.Framework.Mvc.Filters;
 
 namespace Nop.Plugin.Payments.BluePay.Controllers
 {
@@ -29,6 +30,7 @@ namespace Nop.Plugin.Payments.BluePay.Controllers
         private readonly ISettingService _settingService;
         private readonly IStoreService _storeService;
         private readonly IWorkContext _workContext;
+        private readonly IPermissionService _permissionService;
 
         #endregion
 
@@ -40,7 +42,8 @@ namespace Nop.Plugin.Payments.BluePay.Controllers
             IOrderService orderService,
             ISettingService settingService,
             IStoreService storeService,
-            IWorkContext workContext)
+            IWorkContext workContext,
+            IPermissionService permissionService)
         {
             this._localizationService = localizationService;
             this._logger = logger;
@@ -49,49 +52,20 @@ namespace Nop.Plugin.Payments.BluePay.Controllers
             this._settingService = settingService;
             this._storeService = storeService;
             this._workContext = workContext;
+            this._permissionService = permissionService;
         }
 
         #endregion
 
         #region Methods
 
-        [NonAction]
-        public override IList<string> ValidatePaymentForm(FormCollection form)
+        [AuthorizeAdmin]
+        [Area(AreaNames.Admin)]
+        public IActionResult Configure()
         {
-            var warnings = new List<string>();
+            if (!_permissionService.Authorize(StandardPermissionProvider.ManagePaymentMethods))
+                return AccessDeniedView();
 
-            //validate
-            var validator = new PaymentInfoValidator(_localizationService);
-            var model = new PaymentInfoModel
-            {
-                CardNumber = form["CardNumber"],
-                ExpireMonth = form["ExpireMonth"],
-                ExpireYear = form["ExpireYear"],
-                CardCode = form["CardCode"]
-            };
-            var validationResult = validator.Validate(model);
-            if (!validationResult.IsValid)
-                warnings.AddRange(validationResult.Errors.Select(error => error.ErrorMessage));
-
-            return warnings;
-        }
-
-        [NonAction]
-        public override ProcessPaymentRequest GetPaymentInfo(FormCollection form)
-        {
-            return new ProcessPaymentRequest
-            {
-                CreditCardNumber = form["CardNumber"],
-                CreditCardExpireMonth = int.Parse(form["ExpireMonth"]),
-                CreditCardExpireYear = int.Parse(form["ExpireYear"]),
-                CreditCardCvv2 = form["CardCode"]
-            };
-        }
-
-        [AdminAuthorize]
-        [ChildActionOnly]
-        public ActionResult Configure()
-        {
             var storeScope = GetActiveStoreScopeConfiguration(_storeService, _workContext);
             var bluePayPaymentSettings = _settingService.LoadSetting<BluePayPaymentSettings>(storeScope);
 
@@ -122,10 +96,13 @@ namespace Nop.Plugin.Payments.BluePay.Controllers
         }
 
         [HttpPost]
-        [AdminAuthorize]
-        [ChildActionOnly]
-        public ActionResult Configure(ConfigurationModel model)
+        [AuthorizeAdmin]
+        [Area(AreaNames.Admin)]
+        public IActionResult Configure(ConfigurationModel model)
         {
+            if (!_permissionService.Authorize(StandardPermissionProvider.ManagePaymentMethods))
+                return AccessDeniedView();
+
             if (!ModelState.IsValid)
                 return Configure();
 
@@ -160,49 +137,12 @@ namespace Nop.Plugin.Payments.BluePay.Controllers
 
             return Configure();
         }
-
-        [ChildActionOnly]
-        public ActionResult PaymentInfo()
-        {
-            var model = new PaymentInfoModel();
-
-            //years
-            for (var i = 0; i < 15; i++)
-            {
-                var year = Convert.ToString(DateTime.Now.Year + i);
-                model.ExpireYears.Add(new SelectListItem
-                {
-                    Text = year,
-                    Value = year,
-                });
-            }
-
-            //months
-            for (var i = 1; i <= 12; i++)
-            {
-                model.ExpireMonths.Add(new SelectListItem
-                {
-                    Text = i.ToString("D2"),
-                    Value = i.ToString(),
-                });
-            }
-
-            //set postback values
-            model.CardNumber = Request.Form["CardNumber"];
-            model.CardCode = Request.Form["CardCode"];
-            var selectedMonth = model.ExpireMonths.FirstOrDefault(x => x.Value.Equals(Request.Form["ExpireMonth"], StringComparison.InvariantCultureIgnoreCase));
-            if (selectedMonth != null)
-                selectedMonth.Selected = true;
-            var selectedYear = model.ExpireYears.FirstOrDefault(x => x.Value.Equals(Request.Form["ExpireYear"], StringComparison.InvariantCultureIgnoreCase));
-            if (selectedYear != null)
-                selectedYear.Selected = true;
-
-            return View("~/Plugins/Payments.BluePay/Views/PaymentInfo.cshtml", model);
-        }
-
+        
         [HttpPost]
-        public ActionResult Rebilling(FormCollection parameters)
+        public ActionResult Rebilling()
         {
+            var parameters = Request.Form;
+
             var storeScope = GetActiveStoreScopeConfiguration(_storeService, _workContext);
             var bluePayPaymentSettings = _settingService.LoadSetting<BluePayPaymentSettings>(storeScope);
             var bpManager = new BluePayManager
@@ -215,23 +155,21 @@ namespace Nop.Plugin.Payments.BluePay.Controllers
             if (!bpManager.CheckRebillStamp(parameters))
             {
                 _logger.Error("BluePay recurring error: the response has been tampered with");
-                return new HttpStatusCodeResult(HttpStatusCode.OK);
+                return new StatusCodeResult((int)HttpStatusCode.OK);
             }
 
             var authId = bpManager.GetAuthorizationIdByRebillId(parameters["rebill_id"]);
             if (string.IsNullOrEmpty(authId))
             {
-                _logger.Error(string.Format("BluePay recurring error: the initial transaction for rebill {0} was not found",
-                    parameters["rebill_id"]));
-                return new HttpStatusCodeResult(HttpStatusCode.OK);
+                _logger.Error($"BluePay recurring error: the initial transaction for rebill {parameters["rebill_id"]} was not found");
+                return new StatusCodeResult((int)HttpStatusCode.OK);
             }
 
             var initialOrder = _orderService.GetOrderByAuthorizationTransactionIdAndPaymentMethod(authId, "Payments.BluePay");
             if (initialOrder == null)
             {
-                _logger.Error(string.Format("BluePay recurring error: the initial order with the AuthorizationTransactionId {0} was not found", 
-                    parameters["rebill_id"]));
-                return new HttpStatusCodeResult(HttpStatusCode.OK);
+                _logger.Error($"BluePay recurring error: the initial order with the AuthorizationTransactionId {parameters["rebill_id"]} was not found");
+                return new StatusCodeResult((int)HttpStatusCode.OK);
             }
 
             var recurringPayment = _orderService.SearchRecurringPayments(initialOrderId: initialOrder.Id).FirstOrDefault();
@@ -248,18 +186,18 @@ namespace Nop.Plugin.Payments.BluePay.Controllers
                     case "failed":
                     case "error":
                         processPaymentResult.RecurringPaymentFailed = true;
-                        processPaymentResult.Errors.Add(string.Format("BluePay recurring order {0} {1}", initialOrder.Id, parameters["status"]));
+                        processPaymentResult.Errors.Add($"BluePay recurring order {initialOrder.Id} {parameters["status"]}");
                         _orderProcessingService.ProcessNextRecurringPayment(recurringPayment, processPaymentResult);
                         break;
                     case "deleted":
                     case "stopped":
                         _orderProcessingService.CancelRecurringPayment(recurringPayment);
-                        _logger.Information(string.Format("BluePay recurring order {0} was {1}", initialOrder.Id, parameters["status"]));
+                        _logger.Information($"BluePay recurring order {initialOrder.Id} was {parameters["status"]}");
                         break;
                 }
             }
 
-            return new HttpStatusCodeResult(HttpStatusCode.OK);
+            return new StatusCodeResult((int)HttpStatusCode.OK);
         }
 
         #endregion

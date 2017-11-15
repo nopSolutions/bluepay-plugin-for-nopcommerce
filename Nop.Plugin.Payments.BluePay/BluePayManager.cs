@@ -1,11 +1,14 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.IO;
 using System.Linq;
 using System.Net;
 using System.Security.Cryptography;
 using System.Text;
-using System.Web;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.WebUtilities;
+using Microsoft.Extensions.Primitives;
 
 namespace Nop.Plugin.Payments.BluePay
 {
@@ -24,8 +27,8 @@ namespace Nop.Plugin.Payments.BluePay
 
         #region Fields
 
-        private NameValueCollection _requestParams;
-        private NameValueCollection _responseParams;
+        private Dictionary<string, StringValues> _requestParams;
+        private Dictionary<string, StringValues> _responseParams;
 
         #endregion
 
@@ -87,7 +90,7 @@ namespace Nop.Plugin.Payments.BluePay
         /// </summary>
         public bool IsSuccessful
         {
-            get { return (Status == "1" && Message != "DUPLICATE"); }
+            get { return Status == "1" && Message != "DUPLICATE"; }
         }
 
         /// <summary>
@@ -95,7 +98,7 @@ namespace Nop.Plugin.Payments.BluePay
         /// </summary>
         public bool IsSuccessfulCancelRecurring
         {
-            get { return (Status == "stopped" || Status == "deleted"); }
+            get { return Status == "stopped" || Status == "deleted"; }
         }
 
         /// <summary>
@@ -103,7 +106,7 @@ namespace Nop.Plugin.Payments.BluePay
         /// </summary>
         public string Status
         {
-            get { return _responseParams["STATUS"] ?? string.Empty; }
+            get { return GetResponseParams("STATUS"); }
         }
 
         /// <summary>
@@ -111,7 +114,7 @@ namespace Nop.Plugin.Payments.BluePay
         /// </summary>
         public string TransactionId
         {
-            get { return _responseParams["TRANS_ID"] ?? string.Empty; }
+            get { return GetResponseParams("TRANS_ID"); }
         }
 
         /// <summary>
@@ -119,7 +122,7 @@ namespace Nop.Plugin.Payments.BluePay
         /// </summary>
         public string Message
         {
-            get { return _responseParams["MESSAGE"] ?? string.Empty; }
+            get { return GetResponseParams("MESSAGE"); }
         }
 
         /// <summary>
@@ -154,7 +157,7 @@ namespace Nop.Plugin.Payments.BluePay
         /// </summary>
         public string AVS
         {
-            get { return _responseParams["AVS"] ?? string.Empty; }
+            get { return GetResponseParams("AVS"); }
         }
 
         /// <summary>
@@ -169,7 +172,7 @@ namespace Nop.Plugin.Payments.BluePay
         /// </summary>
         public string CVV2
         {
-            get { return _responseParams["CVV2"] ?? string.Empty; }
+            get { return GetResponseParams("CVV2"); }
         }
 
         /// <summary>
@@ -177,7 +180,7 @@ namespace Nop.Plugin.Payments.BluePay
         /// </summary>
         public string RebillId
         {
-            get { return _responseParams["REBID"] ?? string.Empty; }
+            get { return GetResponseParams("REBID"); }
         }
 
         /// <summary>
@@ -185,7 +188,7 @@ namespace Nop.Plugin.Payments.BluePay
         /// </summary>
         public string AuthCode
         {
-            get { return _responseParams["AUTH_CODE"] ?? string.Empty; }
+            get { return GetResponseParams("AUTH_CODE"); }
         }
 
         /// <summary>
@@ -193,7 +196,7 @@ namespace Nop.Plugin.Payments.BluePay
         /// </summary>
         public string CardMask
         {
-            get { return _responseParams["PAYMENT_ACCOUNT_MASK"] ?? string.Empty; }
+            get { return GetResponseParams("PAYMENT_ACCOUNT_MASK"); }
         }
 
         /// <summary>
@@ -201,7 +204,7 @@ namespace Nop.Plugin.Payments.BluePay
         /// </summary>
         public string CardType
         {
-            get { return _responseParams["CARD_TYPE"] ?? string.Empty; }
+            get { return GetResponseParams("CARD_TYPE"); }
         }
 
         /// <summary>
@@ -209,7 +212,7 @@ namespace Nop.Plugin.Payments.BluePay
         /// </summary>
         public string CardCountry
         {
-            get { return _responseParams["CARD_COUNTRY"] ?? string.Empty; }
+            get { return GetResponseParams("CARD_COUNTRY"); }
         }
 
         /// <summary>
@@ -217,7 +220,7 @@ namespace Nop.Plugin.Payments.BluePay
         /// </summary>
         public string BankId
         {
-            get { return _responseParams["BIN"] ?? string.Empty; }
+            get { return GetResponseParams("BIN"); }
         }
 
         /// <summary>
@@ -225,7 +228,7 @@ namespace Nop.Plugin.Payments.BluePay
         /// </summary>
         public string BankName
         {
-            get { return _responseParams["BANK_NAME"] ?? string.Empty; }
+            get { return GetResponseParams("BANK_NAME"); }
         }
 
         /// <summary>
@@ -234,7 +237,7 @@ namespace Nop.Plugin.Payments.BluePay
         /// </summary>
         public string BankInformation
         {
-            get { return _responseParams["BINDATA"] ?? string.Empty; }
+            get { return GetResponseParams("BINDATA"); }
         }
 
         #endregion
@@ -243,13 +246,18 @@ namespace Nop.Plugin.Payments.BluePay
 
         public BluePayManager()
         {
-            _requestParams = HttpUtility.ParseQueryString(string.Empty);
-            _responseParams = new NameValueCollection();
+            _requestParams = new Dictionary<string, StringValues>();
+            _responseParams = new Dictionary<string, StringValues>();
         }
 
         #endregion
 
         #region Utilities
+
+        private string GetResponseParams(string paramName)
+        {
+            return _responseParams.ContainsKey(paramName) ? _responseParams[paramName].ToString() : string.Empty;
+        }
 
         /// <summary>
         /// Set common parameters and post request to BluePay 2.0 API
@@ -266,7 +274,7 @@ namespace Nop.Plugin.Payments.BluePay
             _requestParams.Add("TPS_DEF", "ACCOUNT_ID MODE TRANS_TYPE AMOUNT MASTER_ID");
             _requestParams.Add("TAMPER_PROOF_SEAL", CalculateTPS(transactionType));
 
-            PostRequest(_requestParams.ToString());
+            PostRequest(_requestParams);
         }
 
         /// <summary>
@@ -277,9 +285,8 @@ namespace Nop.Plugin.Payments.BluePay
         /// <returns>A hex-encoded md5 checksum</returns>
         private string CalculateTPS(string transactionType, string tamperProofSeal = null)
         {
-            string tps = tamperProofSeal ?? string.Format("{0}{1}{2}{3}{4}{5}",
-                SecretKey, AccountId, IsSandbox ? "TEST" : "LIVE", transactionType, Amount, MasterId);
-
+            var tps = tamperProofSeal ?? $"{SecretKey}{AccountId}{(IsSandbox ? "TEST" : "LIVE")}{transactionType}{Amount}{MasterId}";
+            
             var md5 = new MD5CryptoServiceProvider();
             var hash = md5.ComputeHash(Encoding.Default.GetBytes(tps));
 
@@ -291,9 +298,15 @@ namespace Nop.Plugin.Payments.BluePay
         /// </summary>
         /// <param name="parameters">Request parameters</param>
         /// <param name="url">URL fo request</param>
-        private void PostRequest(string parameters, string url = null)
+        private void PostRequest(Dictionary<string, StringValues> parameters, string url = null)
         {
-            var postData = Encoding.Default.GetBytes(parameters);
+            var post = new StringBuilder();
+            foreach (var item in parameters)
+            {
+                post.AppendFormat("&{0}={1}", item.Key, WebUtility.UrlEncode(item.Value));
+            }
+
+            var postData = Encoding.Default.GetBytes(post.ToString());
 
             var request = (HttpWebRequest)WebRequest.Create(url ?? DEFAULT_URL);
             request.Method = "POST";
@@ -310,14 +323,14 @@ namespace Nop.Plugin.Payments.BluePay
                 var httpResponse = (HttpWebResponse)request.GetResponse();
                 using (var streamReader = new StreamReader(httpResponse.GetResponseStream()))
                 {
-                    _responseParams = HttpUtility.ParseQueryString(streamReader.ReadToEnd());
+                    _responseParams = QueryHelpers.ParseQuery(streamReader.ReadToEnd());
                 }
             }
             catch (WebException e)
             {
                 using (var streamReader = new StreamReader(e.Response.GetResponseStream()))
                 {
-                    _responseParams = HttpUtility.ParseQueryString(streamReader.ReadToEnd());
+                    _responseParams = QueryHelpers.ParseQuery(streamReader.ReadToEnd());
                     if (string.IsNullOrEmpty(Message))
                         _responseParams["MESSAGE"] = e.Message;
                 }
@@ -415,25 +428,23 @@ namespace Nop.Plugin.Payments.BluePay
             _requestParams.Add("USER_ID", UserId);
             _requestParams.Add("TRANS_TYPE", "GET");
             _requestParams.Add("REBILL_ID", MasterId);
-            _requestParams.Add("TAMPER_PROOF_SEAL", CalculateTPS(null, string.Format("{0}{1}{2}{3}",
-                SecretKey, AccountId, "GET", MasterId)));
+            _requestParams.Add("TAMPER_PROOF_SEAL", CalculateTPS(null, $"{SecretKey}{AccountId}GET{MasterId}"));
 
-            PostRequest(_requestParams.ToString(), REBILLING_URL);
+            PostRequest(_requestParams, REBILLING_URL);
 
             if (IsSuccessfulCancelRecurring)
                 return;
 
             //stop rebilling if transaction is not removed or is not stopped
-            _requestParams = HttpUtility.ParseQueryString(string.Empty);
+            _requestParams = new Dictionary<string, StringValues>();
             _requestParams.Add("ACCOUNT_ID", AccountId);
             _requestParams.Add("USER_ID", UserId);
             _requestParams.Add("TRANS_TYPE", "SET");
             _requestParams.Add("REBILL_ID", MasterId);
             _requestParams.Add("STATUS", "STOPPED");
-            _requestParams.Add("TAMPER_PROOF_SEAL", CalculateTPS(null, string.Format("{0}{1}{2}{3}", 
-                SecretKey, AccountId, "SET", MasterId)));
+            _requestParams.Add("TAMPER_PROOF_SEAL", CalculateTPS(null, $"{SecretKey}{AccountId}SET{MasterId}"));
             
-            PostRequest(_requestParams.ToString(), REBILLING_URL);
+            PostRequest(_requestParams, REBILLING_URL);
         }
 
         /// <summary>
@@ -441,9 +452,9 @@ namespace Nop.Plugin.Payments.BluePay
         /// </summary>
         /// <param name="parameters">Post parameters</param>
         /// <returns>True, if genuine, otherwise false</returns>
-        public bool CheckRebillStamp(NameValueCollection parameters)
+        public bool CheckRebillStamp(IFormCollection parameters)
         {
-            var tamperProofSeal = parameters["BP_STAMP_DEF"].Split(' ')
+            var tamperProofSeal = parameters["BP_STAMP_DEF"].ToString().Split(' ')
                 .Aggregate(SecretKey, (current, next) => current + parameters[next]);
 
             return string.Equals(parameters["BP_STAMP"], CalculateTPS(null, tamperProofSeal));
@@ -460,12 +471,11 @@ namespace Nop.Plugin.Payments.BluePay
             _requestParams.Add("USER_ID", UserId);
             _requestParams.Add("TRANS_TYPE", "GET");
             _requestParams.Add("REBILL_ID", id);
-            _requestParams.Add("TAMPER_PROOF_SEAL", CalculateTPS(null, string.Format("{0}{1}{2}{3}",
-                SecretKey, AccountId, "GET", id)));
+            _requestParams.Add("TAMPER_PROOF_SEAL", CalculateTPS(null, $"{SecretKey}{AccountId}GET{id}"));
 
-            PostRequest(_requestParams.ToString(), REBILLING_URL);
+            PostRequest(_requestParams, REBILLING_URL);
 
-            return _responseParams["TEMPLATE_ID"] ?? string.Empty;
+            return _requestParams.ContainsKey("TEMPLATE_ID") ? _responseParams["TEMPLATE_ID"].ToString() : string.Empty;
         }
 
         #endregion
