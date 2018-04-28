@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Linq;
+using System.Net;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Nop.Plugin.Payments.BluePay.Models;
@@ -35,7 +36,10 @@ namespace Nop.Plugin.Payments.BluePay.Components
                 });
             }
 
-            //set postback values
+            //set postback values (we cannot access "Form" with "GET" requests)
+            if (Request.Method != WebRequestMethods.Http.Get)
+                return View("~/Plugins/Payments.BluePay/Views/PaymentInfo.cshtml", model);
+
             model.CardNumber = Request.Form["CardNumber"];
             model.CardCode = Request.Form["CardCode"];
             var selectedMonth = model.ExpireMonths.FirstOrDefault(x => x.Value.Equals(Request.Form["ExpireMonth"], StringComparison.InvariantCultureIgnoreCase));

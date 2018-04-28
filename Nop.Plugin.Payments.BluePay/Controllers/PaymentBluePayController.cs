@@ -139,9 +139,9 @@ namespace Nop.Plugin.Payments.BluePay.Controllers
         }
         
         [HttpPost]
-        public ActionResult Rebilling()
+        public ActionResult Rebilling(IpnModel model)
         {
-            var parameters = Request.Form;
+            var parameters = model.Form;
 
             var storeScope = GetActiveStoreScopeConfiguration(_storeService, _workContext);
             var bluePayPaymentSettings = _settingService.LoadSetting<BluePayPaymentSettings>(storeScope);
