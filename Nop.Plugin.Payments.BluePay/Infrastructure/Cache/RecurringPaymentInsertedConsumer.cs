@@ -9,7 +9,7 @@ namespace Nop.Plugin.Payments.BluePay.Infrastructure.Cache
     /// <summary>
     /// RecurringPaymentInserted event consumer
     /// </summary>
-    public partial class RecurringPaymentInsertedConsumer : IConsumer<EntityInserted<RecurringPayment>>
+    public partial class RecurringPaymentInsertedConsumer : IConsumer<EntityInsertedEvent<RecurringPayment>>
     {
         private readonly IOrderService _orderService;
 
@@ -22,7 +22,7 @@ namespace Nop.Plugin.Payments.BluePay.Infrastructure.Cache
         /// Handles the event.
         /// </summary>
         /// <param name="payment">The recurring payment.</param>
-        public void HandleEvent(EntityInserted<RecurringPayment> payment)
+        public void HandleEvent(EntityInsertedEvent<RecurringPayment> payment)
         {
             var recurringPayment = payment.Entity;
             if (recurringPayment == null)

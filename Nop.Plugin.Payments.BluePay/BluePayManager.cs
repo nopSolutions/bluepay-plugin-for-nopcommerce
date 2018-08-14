@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Collections.Specialized;
 using System.IO;
 using System.Linq;
 using System.Net;
@@ -43,10 +42,6 @@ namespace Nop.Plugin.Payments.BluePay
         // details info
         public string InvoiceId { get; set; }
         public string OrderId { get; set; }
-        public string AmountTip { get; set; }
-        public string AmountTax { get; set; }
-        public string AmountFood { get; set; }
-        public string AmountMisc { get; set; }
         
         // customer info
         public string FirstName { get; set; }

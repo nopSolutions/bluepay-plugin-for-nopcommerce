@@ -12,7 +12,6 @@ using Nop.Services.Logging;
 using Nop.Services.Orders;
 using Nop.Services.Payments;
 using Nop.Services.Security;
-using Nop.Services.Stores;
 using Nop.Web.Framework;
 using Nop.Web.Framework.Controllers;
 using Nop.Web.Framework.Mvc.Filters;
@@ -28,9 +27,8 @@ namespace Nop.Plugin.Payments.BluePay.Controllers
         private readonly IOrderProcessingService _orderProcessingService;
         private readonly IOrderService _orderService;
         private readonly ISettingService _settingService;
-        private readonly IStoreService _storeService;
-        private readonly IWorkContext _workContext;
         private readonly IPermissionService _permissionService;
+        private readonly IStoreContext _storeContext;
 
         #endregion
 
@@ -41,18 +39,16 @@ namespace Nop.Plugin.Payments.BluePay.Controllers
             IOrderProcessingService orderProcessingService,
             IOrderService orderService,
             ISettingService settingService,
-            IStoreService storeService,
-            IWorkContext workContext,
-            IPermissionService permissionService)
+            IPermissionService permissionService,
+            IStoreContext storeContext)
         {
             this._localizationService = localizationService;
             this._logger = logger;
             this._orderProcessingService = orderProcessingService;
             this._orderService = orderService;
             this._settingService = settingService;
-            this._storeService = storeService;
-            this._workContext = workContext;
             this._permissionService = permissionService;
+            this._storeContext = storeContext;
         }
 
         #endregion
@@ -66,7 +62,7 @@ namespace Nop.Plugin.Payments.BluePay.Controllers
             if (!_permissionService.Authorize(StandardPermissionProvider.ManagePaymentMethods))
                 return AccessDeniedView();
 
-            var storeScope = GetActiveStoreScopeConfiguration(_storeService, _workContext);
+            var storeScope = _storeContext.ActiveStoreScopeConfiguration;
             var bluePayPaymentSettings = _settingService.LoadSetting<BluePayPaymentSettings>(storeScope);
 
             var model = new ConfigurationModel
@@ -107,7 +103,7 @@ namespace Nop.Plugin.Payments.BluePay.Controllers
                 return Configure();
 
             //load settings for a chosen store scope
-            var storeScope = GetActiveStoreScopeConfiguration(_storeService, _workContext);
+            var storeScope = _storeContext.ActiveStoreScopeConfiguration;
             var bluePayPaymentSettings = _settingService.LoadSetting<BluePayPaymentSettings>(storeScope);
 
             //save settings
@@ -143,7 +139,7 @@ namespace Nop.Plugin.Payments.BluePay.Controllers
         {
             var parameters = model.Form;
 
-            var storeScope = GetActiveStoreScopeConfiguration(_storeService, _workContext);
+            var storeScope = _storeContext.ActiveStoreScopeConfiguration;
             var bluePayPaymentSettings = _settingService.LoadSetting<BluePayPaymentSettings>(storeScope);
             var bpManager = new BluePayManager
             {
