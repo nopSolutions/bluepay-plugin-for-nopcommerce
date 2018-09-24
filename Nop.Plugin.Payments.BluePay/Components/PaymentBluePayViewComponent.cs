@@ -37,7 +37,7 @@ namespace Nop.Plugin.Payments.BluePay.Components
             }
 
             //set postback values (we cannot access "Form" with "GET" requests)
-            if (Request.Method != WebRequestMethods.Http.Get)
+            if (Request.Method == WebRequestMethods.Http.Get)
                 return View("~/Plugins/Payments.BluePay/Views/PaymentInfo.cshtml", model);
 
             model.CardNumber = Request.Form["CardNumber"];
